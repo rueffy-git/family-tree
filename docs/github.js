@@ -10,7 +10,8 @@ export class GitHubError extends Error {constructor(message,status){super(messag
 export class OwnerConnection {
   #token='';
   #fetch;
-  constructor(fetcher=fetch){this.#fetch=fetcher;this.connected=false;}
+  // Native browser fetch must not receive this OwnerConnection as its receiver.
+  constructor(fetcher=fetch){this.#fetch=(...args)=>fetcher(...args);this.connected=false;}
   async #request(path,options={}){
     let response;
     try{response=await this.#fetch(api+path,{...options,credentials:'omit',cache:'no-store',redirect:'error',headers:{Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28',...(this.#token?{Authorization:`Bearer ${this.#token}`} : {}),...(options.body?{'Content-Type':'application/json'}:{})}});}

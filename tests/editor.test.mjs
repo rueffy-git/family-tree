@@ -59,6 +59,18 @@ function githubMock({userId=repository.ownerId,push=true}={}){
   };
   return {fetcher,calls,get puts(){return puts;},advance(){sha='remote-change';},failResponse(){failAfterWrite=true;},conflict(){conflict=true;}};
 }
+test('the browser fetch function is called without an OwnerConnection receiver',async()=>{
+  const mock=githubMock();
+  const conn=new OwnerConnection(function(...args){
+    if(this!==undefined)throw new TypeError('Illegal invocation');
+    return mock.fetcher(...args);
+  });
+  await conn.connect('github_pat_synthetic');
+  const current=await conn.read();
+  await conn.publish({ciphertext:'new'},current.sha);
+  assert.equal(conn.connected,true);assert.equal(mock.puts,1);
+});
+
 test('a family code and another GitHub account cannot enter owner mode or publish',async()=>{
   const mock=githubMock({userId:123});const conn=new OwnerConnection(mock.fetcher);
   await assert.rejects(conn.connect('FAMILY-VIEW-CODE'),/fine-grained/);assert.equal(mock.calls.length,0);
