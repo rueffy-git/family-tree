@@ -23,6 +23,17 @@ const data=JSON.parse(stdout);
 let access=null;
 try {access=JSON.parse(await readFile(args.access,'utf8'));}
 catch(error) {if(error.code!=='ENOENT')throw error;}
+// Browser edits are authoritative. Do not silently replace them with an older
+// Gramps export, including when rotating the access code.
+if(access){
+  let existing;
+  try{existing=JSON.parse(await readFile(path.join(root,'docs/tree.enc.json'),'utf8'));}
+  catch(error){if(error.code!=='ENOENT')throw error;}
+  if(existing){
+    const current=await decrypt(existing,access.code||access.passphrase);
+    if(current.editorRevision)throw new Error('This tree has online edits. Use the owner editor, or merge the online records before replacing them with a Gramps export.');
+  }
+}
 const alphabet='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 if(!access||args['rotate-code']==='yes') {
   if(access) await writeFile(path.join(accessDirectory,`previous-access-${Date.now()}.json`),JSON.stringify(access,null,2)+'\n',{flag:'wx',mode:0o600});

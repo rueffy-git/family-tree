@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 const svgNS = 'http://www.w3.org/2000/svg';
 const colours = ['#6f8e68','#6f8f94','#a88c59','#9b7867','#788496','#8a8f63','#77958a','#a28485','#798b62'];
 let data = null, index = null, view = null, bounds = null, epoch = 0, busy = false, selected = null;
+let ownerEditor = null, currentEnvelope = null;
 const displayedNotes = new Set();
 const pointers = new Map();
 let gesture = null, moved = false, pressedPerson = null;
@@ -72,6 +73,7 @@ function renderTree() {
     lines.append(svgElement('path', {d, class:`connector ${edge.kind}`, 'data-family':edge.family}));
   }
   svg.append(lines);
+  for (const junction of data.layout.junctions || []) svg.append(svgElement('circle', {cx:junction.x,cy:junction.y,r:4,class:'family-junction','aria-hidden':'true'}));
   for (const branch of data.layout.branches) {
     const person = index.people.get(branch.person);
     svg.append(svgElement('text', {x:branch.x+4, y:branch.y, class:'branch-number'}, `${String(branch.number).padStart(2,'0')}  ${person.name}`));
@@ -259,6 +261,7 @@ function showPerson(id) {
   }
   sourcesBlock.append(details,element('p',`Record ${person.id} · Last published ${formatDate({val:data.updated})}`,'muted'));
   content.append(sourcesBlock);
+  ownerEditor?.personControls(content,id);
   const dialog=$('person-dialog');if(!dialog.open) dialog.showModal();
   name.focus({preventScroll:true});dialog.scrollTop=0;
 }
@@ -282,6 +285,8 @@ function search() {
   list.hidden=false;$('search').setAttribute('aria-expanded','true');
 }
 function lock(focus=true) {
+  if(focus && ownerEditor && !ownerEditor.canLock())return;
+  ownerEditor?.disconnect();currentEnvelope=null;
   displayedNotes.clear();
   epoch++;data=null;index=null;view=null;bounds=null;selected=null;gesture=null;pointers.clear();
   $('tree').replaceChildren();$('tree').removeAttribute('viewBox');$('person-content').replaceChildren();
@@ -302,6 +307,7 @@ $('unlock-form').addEventListener('submit',async e=>{
     const envelope=await response.json();
     const result=await decrypt(envelope,phrase);phrase='';validate(result);
     if(attempt!==epoch)return;
+    currentEnvelope=envelope;
     data=result;index={};for(const name of ['people','families','events','notes','citations','sources'])index[name]=new Map(data[name].map(v=>[v.id,v]));
     index.positions=new Map(data.layout.nodes.map(n=>[n.id,n]));
     renderTree();$('locked').hidden=true;$('viewer').hidden=false;
@@ -320,6 +326,27 @@ $('show-passphrase').addEventListener('click',()=>{
   $('show-passphrase').textContent=show?'Hide':'Show';$('show-passphrase').setAttribute('aria-label',show?'Hide access code':'Show access code');$('show-passphrase').setAttribute('aria-pressed',String(show));
 });
 $('lock').addEventListener('click',()=>lock());$('fit').addEventListener('click',fitTree);
+$('owner-edit').addEventListener('click',async()=>{
+  if(!data)return;
+  try{
+    if(!ownerEditor){
+      const {createEditor}=await import('./editor.js');
+      if(!data)return;
+      ownerEditor=createEditor({
+        getData:()=>structuredClone(data),getEnvelope:()=>structuredClone(currentEnvelope),
+        setEnvelope:value=>{currentEnvelope=structuredClone(value);},closePerson,lock:()=>lock(),
+        showData:(value,id)=>{
+          validate(value);data=structuredClone(value);index={};
+          for(const name of ['people','families','events','notes','citations','sources'])index[name]=new Map(data[name].map(v=>[v.id,v]));
+          index.positions=new Map(data.layout.nodes.map(n=>[n.id,n]));
+          closePerson();hideResults();renderTree();$('tree-summary').textContent=`${data.people.length} people · Updated ${formatDate({val:data.updated})}`;
+          if(id&&index.people.has(id))selectPerson(id,true);else fitTree();
+        }
+      });
+    }
+    await ownerEditor.open();
+  }catch{ $('view-status').textContent='The editor could not be opened. Reload the page and try again.'; }
+});
 $('zoom-in').addEventListener('click',()=>zoom(1.35));$('zoom-out').addEventListener('click',()=>zoom(1/1.35));
 $('close-person').addEventListener('click',closePerson);
 $('person-dialog').addEventListener('cancel',e=>{e.preventDefault();closePerson();});
