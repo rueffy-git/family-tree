@@ -1,0 +1,11 @@
+{
+  "name": "encrypted-family-tree",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/crypto.test.mjs && python -B -m unittest discover -s tests -p test_*.py",
+    "serve": "node scripts/serve.mjs"
+  },
+  "engines": { "node": ">=20" }
+}

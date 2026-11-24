@@ -1,0 +1,14 @@
+node_modules/
+__pycache__/
+*.pyc
+.private/
+.tmp/
+test-results/
+*.gramps
+*.gpkg
+*.ged
+*.pdf
+*.sqlite*
+*.dpapi
+*passphrase*
+
