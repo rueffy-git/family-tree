@@ -5,6 +5,10 @@ export function normalisePassphrase(value) {
   return value.normalize('NFKC').trim().replace(/\s+/g, ' ');
 }
 
+export function normaliseAccessCode(value) {
+  return value.normalize('NFKC').toUpperCase().replace(/[\s-]+/g, '');
+}
+
 function decode64(value) {
   if (typeof value !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) throw new Error('Invalid encrypted data.');
   return Uint8Array.from(atob(value), c => c.charCodeAt(0));
@@ -16,8 +20,8 @@ export function encode64(bytes) {
   return btoa(value);
 }
 
-async function keyFor(passphrase, salt, usage) {
-  const bytes = encoder.encode(normalisePassphrase(passphrase));
+async function keyFor(passphrase, salt, usage, code = false) {
+  const bytes = encoder.encode(code ? normaliseAccessCode(passphrase) : normalisePassphrase(passphrase));
   try {
     const material = await crypto.subtle.importKey('raw', bytes, 'PBKDF2', false, ['deriveKey']);
     return await crypto.subtle.deriveKey({name:'PBKDF2', hash:'SHA-256', salt, iterations:ITERATIONS},
@@ -25,25 +29,26 @@ async function keyFor(passphrase, salt, usage) {
   } finally { bytes.fill(0); }
 }
 
-export async function encrypt(data, passphrase) {
+export async function encrypt(data, passphrase, {format = 'passphrase'} = {}) {
+  if (!['passphrase','code'].includes(format)) throw new Error('Unsupported access format.');
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await keyFor(passphrase, salt, ['encrypt']);
+  const key = await keyFor(passphrase, salt, ['encrypt'], format === 'code');
   const bytes = encoder.encode(JSON.stringify(data));
   try {
     const ciphertext = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv, tagLength:128}, key, bytes));
-    return {version:1, algorithm:'AES-256-GCM', kdf:'PBKDF2-SHA256', iterations:ITERATIONS,
+    return {version:format === 'code' ? 2 : 1, algorithm:'AES-256-GCM', kdf:'PBKDF2-SHA256', iterations:ITERATIONS,
       salt:encode64(salt), iv:encode64(iv), ciphertext:encode64(ciphertext)};
   } finally { bytes.fill(0); }
 }
 
 export async function decrypt(envelope, passphrase) {
-  if (envelope.version !== 1 || envelope.algorithm !== 'AES-256-GCM' || envelope.kdf !== 'PBKDF2-SHA256'
+  if (![1,2].includes(envelope.version) || envelope.algorithm !== 'AES-256-GCM' || envelope.kdf !== 'PBKDF2-SHA256'
       || envelope.iterations !== ITERATIONS) throw new Error('Unsupported encrypted data.');
   const salt = decode64(envelope.salt), iv = decode64(envelope.iv), ciphertext = decode64(envelope.ciphertext);
   if (salt.length !== 16 || iv.length !== 12 || ciphertext.length < 16 || ciphertext.length > 10000000)
     throw new Error('Invalid encrypted data.');
-  const key = await keyFor(passphrase, salt, ['decrypt']);
+  const key = await keyFor(passphrase, salt, ['decrypt'], envelope.version === 2);
   const bytes = new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM', iv, tagLength:128}, key, ciphertext));
   try { return JSON.parse(new TextDecoder('utf-8', {fatal:true}).decode(bytes)); }
   finally { bytes.fill(0); }

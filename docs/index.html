@@ -20,15 +20,16 @@
       <h1 id="welcome-title">Our family tree</h1>
       <p class="welcome-intro">Explore the people and connections<br>that make up our family.</p>
       <form id="unlock-form">
-        <label for="passphrase">Family passphrase</label>
+        <label for="passphrase">Family access code</label>
         <div class="password-row">
-          <input id="passphrase" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" required aria-describedby="unlock-message">
-          <button id="show-passphrase" type="button" aria-label="Show passphrase" aria-pressed="false">Show</button>
+          <input id="passphrase" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="30" placeholder="XXXX-XXXX-XXXX" required aria-describedby="code-help unlock-message">
+          <button id="show-passphrase" type="button" aria-label="Show access code" aria-pressed="false">Show</button>
         </div>
+        <p id="code-help" class="code-help">Upper or lower case is fine. Spaces and hyphens are optional.</p>
         <button class="primary unlock-button" id="unlock-button" type="submit">Open the family tree <span aria-hidden="true">↗</span></button>
         <p id="unlock-message" class="form-message" role="status" aria-live="polite"></p>
       </form>
-      <p class="privacy-note">The family records are encrypted.<br>Ask the family member who shared this page for the passphrase.</p>
+      <p class="privacy-note">The family records are encrypted.<br>Ask the family member who shared this page for the access code.</p>
     </section>
     <p class="locked-footer">One family. Many branches.</p>
     <noscript>JavaScript must be enabled to unlock and view this tree.</noscript>
@@ -43,7 +44,7 @@
           <input id="search" type="search" placeholder="Find a person…" autocomplete="off" aria-controls="search-results" aria-expanded="false">
           <div id="search-results" hidden aria-label="Matching people"></div>
         </div>
-        <button id="lock" class="quiet" title="Clear the tree and return to the passphrase screen">Lock tree</button>
+        <button id="lock" class="quiet" title="Clear the tree and return to the access-code screen">Lock tree</button>
       </div>
     </header>
     <nav class="branch-bar" aria-label="Tree navigation">

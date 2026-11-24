@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 const svgNS = 'http://www.w3.org/2000/svg';
 const colours = ['#6f8e68','#6f8f94','#a88c59','#9b7867','#788496','#8a8f63','#77958a','#a28485','#798b62'];
 let data = null, index = null, view = null, bounds = null, epoch = 0, busy = false, selected = null;
+const displayedNotes = new Set();
 const pointers = new Map();
 let gesture = null, moved = false, pressedPerson = null;
 
@@ -156,7 +157,9 @@ function section(title) {
 function appendNotes(container, ids) {
   for (const id of [...new Set(ids)]) {
     const note = index.notes.get(id);
-    if (note?.text) container.append(element('p',note.text,'note'));
+    if (note?.text && !displayedNotes.has(note.text.trim())) {
+      container.append(element('p',note.text,'note')); displayedNotes.add(note.text.trim());
+    }
   }
 }
 function appendEvent(container, event) {
@@ -168,6 +171,7 @@ function appendEvent(container, event) {
 function showPerson(id) {
   if (!data) return;
   const person = index.people.get(id); if (!person) return;
+  displayedNotes.clear();
   selectPerson(id);
   const content = $('person-content'); content.replaceChildren();
   const name = element('h2',person.name); name.id='person-name'; name.tabIndex=-1; content.append(name);
@@ -177,14 +181,27 @@ function showPerson(id) {
     const block = section('Dates and events'); events.forEach(e=>appendEvent(block,e)); content.append(block);
   }
   const parents = section('Parents and siblings');
+  const knownSiblings = new Set([id]);
+  const recordedParents = new Set();
   if (!person.parentFamilies.length) parents.append(element('p','Parents are not recorded.','muted'));
   for (const fid of person.parentFamilies) {
     const family = index.families.get(fid);
+    family.parents.forEach(p=>recordedParents.add(p));
     const row=element('p'); family.parents.forEach(p=>row.append(personLink(p))); parents.append(row);
     if (family.parents.length===1) parents.append(element('p','Only this parent is recorded.','muted'));
     const siblings = family.children.filter(p=>p!==id);
+    siblings.forEach(p=>knownSiblings.add(p));
     if (siblings.length) {parents.append(element('h4','Siblings in this recorded family')); const s=element('p');siblings.forEach(p=>s.append(personLink(p)));parents.append(s);}
     appendNotes(parents,family.notes);
+  }
+  // Show other children without guessing whether the unrecorded parent is shared.
+  for (const parentId of recordedParents) {
+    const parent = index.people.get(parentId);
+    const others = [...new Set(parent.families.flatMap(fid=>index.families.get(fid).children))].filter(p=>!knownSiblings.has(p));
+    if (others.length) {
+      parents.append(element('h4',`Other children of ${parent.name}`));
+      const row=element('p');others.forEach(p=>{row.append(personLink(p));knownSiblings.add(p);});parents.append(row);
+    }
   }
   content.append(parents);
   const allFamilyIds = [...new Set([...person.families,...person.parentFamilies])];
@@ -265,12 +282,13 @@ function search() {
   list.hidden=false;$('search').setAttribute('aria-expanded','true');
 }
 function lock(focus=true) {
+  displayedNotes.clear();
   epoch++;data=null;index=null;view=null;bounds=null;selected=null;gesture=null;pointers.clear();
   $('tree').replaceChildren();$('tree').removeAttribute('viewBox');$('person-content').replaceChildren();
   $('person-dialog').close();$('search').value='';$('search-results').replaceChildren();hideResults();
   $('branch').replaceChildren();$('tree-summary').textContent='';$('view-status').textContent='';
   $('viewer').hidden=true;$('locked').hidden=false;$('passphrase').value='';$('passphrase').type='password';
-  $('show-passphrase').textContent='Show';$('show-passphrase').setAttribute('aria-label','Show passphrase');$('show-passphrase').setAttribute('aria-pressed','false');
+  $('show-passphrase').textContent='Show';$('show-passphrase').setAttribute('aria-label','Show access code');$('show-passphrase').setAttribute('aria-pressed','false');
   $('unlock-message').textContent='';if(focus)$('passphrase').focus();
 }
 $('unlock-form').addEventListener('submit',async e=>{
@@ -292,14 +310,14 @@ $('unlock-form').addEventListener('submit',async e=>{
   } catch(error) {
     if(attempt===epoch) {
       lock(false);
-      $('unlock-message').textContent=error.message==='download'?'The family records could not be loaded. Please try again.':'The tree could not be opened. Check the passphrase and try again. If it still fails, contact the person who shared the tree.';
+      $('unlock-message').textContent=error.message==='download'?'The family records could not be loaded. Please try again.':'The tree could not be opened. Check the access code and try again. If it still fails, contact the person who shared the tree.';
       $('passphrase').focus();
     }
   } finally {phrase='';busy=false;$('unlock-button').disabled=false;}
 });
 $('show-passphrase').addEventListener('click',()=>{
   const show=$('passphrase').type==='password';$('passphrase').type=show?'text':'password';
-  $('show-passphrase').textContent=show?'Hide':'Show';$('show-passphrase').setAttribute('aria-label',show?'Hide passphrase':'Show passphrase');$('show-passphrase').setAttribute('aria-pressed',String(show));
+  $('show-passphrase').textContent=show?'Hide':'Show';$('show-passphrase').setAttribute('aria-label',show?'Hide access code':'Show access code');$('show-passphrase').setAttribute('aria-pressed',String(show));
 });
 $('lock').addEventListener('click',()=>lock());$('fit').addEventListener('click',fitTree);
 $('zoom-in').addEventListener('click',()=>zoom(1.35));$('zoom-out').addEventListener('click',()=>zoom(1/1.35));

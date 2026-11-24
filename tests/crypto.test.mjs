@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {encrypt,decrypt,normalisePassphrase} from '../docs/crypto.js';
+import {encrypt,decrypt,normalisePassphrase,normaliseAccessCode} from '../docs/crypto.js';
 
 const phrase='synthetic testing words never use these';
 const record={version:1,people:[{id:'test-person',name:'Synthetic person',note:'<img src=x onerror=alert(1)>'}]};
@@ -21,4 +21,15 @@ test('tampered data is rejected and every publication uses fresh randomness',asy
 test('copy and paste spacing is normalised without weakening case sensitivity',()=>{
   assert.equal(normalisePassphrase('  words\n with   spaces  '),'words with spaces');
   assert.notEqual(normalisePassphrase('Words'),normalisePassphrase('words'));
+});
+
+test('access codes accept lower case and optional separators, but reject a wrong character',async()=>{
+  const code='ABCD-EFGH-2345';
+  assert.equal(normaliseAccessCode(' abcd efgh-2345 '),'ABCDEFGH2345');
+  const envelope=await encrypt(record,code,{format:'code'});
+  assert.equal(envelope.version,2);
+  for(const input of [code,'abcdefgh2345','AbCd eFgH 2345','  ABCD-EFGH-2345  '])
+    assert.deepEqual(await decrypt(envelope,input),record);
+  await assert.rejects(decrypt(envelope,'ABCD-EFGH-2346'));
+  await assert.rejects(decrypt({...envelope,version:1},code));
 });
